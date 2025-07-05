@@ -6,8 +6,8 @@ public class GirdPosition : MonoBehaviour
     [SerializeField] private int y;
     private void OnMouseDown()
     {
-        Debug.Log("click");
-        GameManager.Instance.ClickedOnGridPosition(x,y);
+        
+        GameManager.Instance.ClickedOnGridPositionRpc(x,y,GameManager.Instance.GetLocalPlayerType());
     }
     
 }

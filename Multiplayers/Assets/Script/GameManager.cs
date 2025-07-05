@@ -1,7 +1,8 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 
-public class GameManager : MonoBehaviour
+public class GameManager : NetworkBehaviour
 {
    public static GameManager Instance { get; private set; }//单例模式
 
@@ -12,8 +13,17 @@ public class GameManager : MonoBehaviour
     public class OnClickedOnGridPositionEventArgs : EventArgs {//发布者服务自带的一些参数
         public int x;
         public int y;
-
+        public PlayerType playerType;
     }
+
+    public enum PlayerType
+    {
+        None,
+        Cross,
+        Circle,
+    }
+    private PlayerType localPlayerType;
+    private PlayerType currentPlayablePlayerType;
 
     private void Awake()
    {    
@@ -23,12 +33,57 @@ public class GameManager : MonoBehaviour
         }
         Instance = this;
    }
-   public void ClickedOnGridPosition(int x,int y)//触发事件
-   {
+
+    public override void OnNetworkSpawn()
+    {
+        Debug.Log("OnNetworkSpawn"+NetworkManager.Singleton.LocalClientId);//服务器点击为0，客户端为1,从而使得看谁使用O，谁使用X
+        if(NetworkManager.Singleton.LocalClientId ==0)
+        {
+            localPlayerType = PlayerType.Cross;
+        }
+        else
+        {
+            localPlayerType = PlayerType.Circle; 
+        }
+        if (IsServer)//判断是不是服务器
+        {
+            currentPlayablePlayerType = PlayerType.Cross;
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    public void ClickedOnGridPositionRpc(int x,int y,PlayerType playerType)//1. 触发事件
+                                                                           //2.同时也是判断客户端和服务器一人只能下一步棋，因为客户端和服务器中的localPlayerType和currentPlayablePlayerType不同
+    {
         Debug.Log("ClickedOnGridPosition"+x+","+y);
-        OnClickedOnGridPosition?.Invoke(this,new OnClickedOnGridPositionEventArgs{
+        if(playerType != currentPlayablePlayerType)//这个判断语句让服务器和客户端每个人只能下一步
+        {
+            return;
+        }
+       
+        OnClickedOnGridPosition?.Invoke(this, new OnClickedOnGridPositionEventArgs
+        {
             x = x,
             y = y,
+            playerType = playerType,
         });
+       
+        switch (currentPlayablePlayerType) 
+        {
+            default:
+            case PlayerType.Cross:
+            
+                currentPlayablePlayerType = PlayerType.Circle;
+                break;
+            case PlayerType.Circle:
+                
+                currentPlayablePlayerType = PlayerType.Cross;
+                break;
+        }
+
+    }
+    public PlayerType GetLocalPlayerType()
+   {
+        return localPlayerType;
    }
 }
