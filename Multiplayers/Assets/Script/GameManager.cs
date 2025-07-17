@@ -17,10 +17,13 @@ public class GameManager : NetworkBehaviour
         public PlayerType playerType;
     }
     public event EventHandler OnGameStarted;//发布者
+    public event EventHandler OnRematch;//发布者
     public event EventHandler<OnGameWinEventArgs> OnGameWin;//发布者
+    
     public class OnGameWinEventArgs:EventArgs//发布者
     {
         public Line line;
+        public PlayerType winPlayerType;
     }
     public event EventHandler OnCurrentPlayablePlayerTypeChanged;//发布者
     public enum PlayerType
@@ -61,47 +64,55 @@ public class GameManager : NetworkBehaviour
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,0),new Vector2Int(1,0),new Vector2Int(2,0),},
-                centerGridPosition = new Vector2Int(1,0)
-                
+                centerGridPosition = new Vector2Int(1,0),
+                orientation = Orientation.Horizontal,
             },
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,1),new Vector2Int(1,1),new Vector2Int(2,1),},
-                centerGridPosition = new Vector2Int(1,1)
+                centerGridPosition = new Vector2Int(1,1),
+                orientation = Orientation.Horizontal,
             },
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,2),new Vector2Int(1,2),new Vector2Int(2,2),},
-                centerGridPosition = new Vector2Int(1,2)
+                centerGridPosition = new Vector2Int(1,2),
+                orientation = Orientation.Horizontal,
             },
 
             //Vertical
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,0),new Vector2Int(0,1),new Vector2Int(0,2),},
-                centerGridPosition = new Vector2Int(0,1)
+                centerGridPosition = new Vector2Int(0,1),
+                orientation = Orientation.Vertical,
+
             },
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(1,0),new Vector2Int(1,1),new Vector2Int(1,2),},
-                centerGridPosition = new Vector2Int(1,1)
+                centerGridPosition = new Vector2Int(1,1),
+                orientation = Orientation.Vertical,
             },
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(2,0),new Vector2Int(2,1),new Vector2Int(2,2),},
-                centerGridPosition = new Vector2Int(2,1)
+                centerGridPosition = new Vector2Int(2,1),
+                orientation = Orientation.Vertical,
             },
 
             //Diagonals
             new Line
             {
                 gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,0),new Vector2Int(1,1),new Vector2Int(2,2),},
-                centerGridPosition = new Vector2Int(1,1)
+                centerGridPosition = new Vector2Int(1,1),
+                orientation = Orientation.DiagonalA,
             },
             new Line
             {
-                gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,2),new Vector2Int(2,1),new Vector2Int(2,2),},
-                centerGridPosition = new Vector2Int(1,1)
+                gridVector2IntList = new List<Vector2Int>{new Vector2Int(0,2),new Vector2Int(1,1),new Vector2Int(2,0),},
+                centerGridPosition = new Vector2Int(1,1),
+                orientation = Orientation.DiagonalB,
             },
           
         };
@@ -196,19 +207,51 @@ public class GameManager : NetworkBehaviour
     }
     private void TestWinner()
     {
-        foreach(Line line in lineList)
+        for(int i=0;i<lineList.Count;i++)
         {
+            Line line = lineList[i];
             if (TestWinnerLine(line))
             {
-                Debug.Log("win");
+             
                 currentPlayablePlayerType.Value = PlayerType.None;
-                OnGameWin?.Invoke(this, new OnGameWinEventArgs{
-                    line = line
-                });
+                TriggerOnGameWinRpc(i, PlayerTypeArray[line.centerGridPosition.x, line.centerGridPosition.y]);
                 break;
             }
         }
-      
+       
+
+
+    }
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerOnGameWinRpc(int  lineIndex, PlayerType winPlayerType)
+    {
+        Line line = lineList[lineIndex];
+        OnGameWin?.Invoke(this, new OnGameWinEventArgs
+        {
+            line = line,
+            winPlayerType = winPlayerType,
+        });
+    }
+
+
+    [Rpc(SendTo.Server)]
+    public void RematchRpc()
+    {
+        for(int x=0; x<PlayerTypeArray.GetLength(0);x++)
+        {
+            for(int y=0; y<PlayerTypeArray.GetLength(1);y++)
+            {
+                PlayerTypeArray[x, y] = PlayerType.None;
+            }
+        }
+        currentPlayablePlayerType.Value = PlayerType.Cross;
+        TriggerOnRematchRpc ();
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerOnRematchRpc()
+    {
+        OnRematch?.Invoke(this, EventArgs.Empty);
     }
     public PlayerType GetLocalPlayerType()
     {
