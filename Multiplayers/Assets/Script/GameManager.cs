@@ -18,6 +18,7 @@ public class GameManager : NetworkBehaviour
     }
     public event EventHandler OnGameStarted;//发布者
     public event EventHandler OnRematch;//发布者
+    public event EventHandler OnGameTied;//发布者
     public event EventHandler<OnGameWinEventArgs> OnGameWin;//发布者
     
     public class OnGameWinEventArgs:EventArgs//发布者
@@ -51,6 +52,8 @@ public class GameManager : NetworkBehaviour
     private NetworkVariable<PlayerType> currentPlayablePlayerType = new NetworkVariable<PlayerType>();//只有服务器能写入但是，客户端可以读取
     private PlayerType[,] PlayerTypeArray;
     private List<Line> lineList;
+    private NetworkVariable<int> playerCrossScore = new NetworkVariable<int>();//记分数，赢的分数
+    private NetworkVariable<int> playerCircleScore = new NetworkVariable<int>();//记分数，赢的分数
     private void Awake()
    {    
         if(Instance!=null)
@@ -214,13 +217,44 @@ public class GameManager : NetworkBehaviour
             {
              
                 currentPlayablePlayerType.Value = PlayerType.None;
+                PlayerType winPlayerType = PlayerTypeArray[line.centerGridPosition.x, line.centerGridPosition.y];
+                switch (winPlayerType)
+                {
+                    case PlayerType.Cross:
+                        playerCrossScore.Value++;
+                        break;
+
+                    case PlayerType.Circle:
+                        playerCircleScore.Value++;
+                        break;
+                }
+
                 TriggerOnGameWinRpc(i, PlayerTypeArray[line.centerGridPosition.x, line.centerGridPosition.y]);
-                break;
+                return;
             }
         }
-       
-
-
+        bool hasTie = true;
+        for(int x=0;x<PlayerTypeArray.GetLength(0);x++)
+        {
+            for(int y=0; y<PlayerTypeArray.GetLength(1);y++)
+            {
+                if (PlayerTypeArray[x, y] == PlayerType.None)
+                {
+                    hasTie = false;
+                    break;
+                }
+            }
+        }
+        if(hasTie)
+        {
+            Debug.Log("进入平局");
+            OnGameTied?.Invoke(this,EventArgs.Empty);
+        }
+    }
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerOnGameTiedRpc()
+    {
+        OnGameTied?.Invoke(this, EventArgs.Empty);
     }
     [Rpc(SendTo.ClientsAndHost)]
     private void TriggerOnGameWinRpc(int  lineIndex, PlayerType winPlayerType)
@@ -260,5 +294,10 @@ public class GameManager : NetworkBehaviour
     public PlayerType GetCurrentPlayablePlayerType()
     {
         return currentPlayablePlayerType.Value;
+    }
+    public void GetScores(out int playerCircleScore,out int playerCrossScore)
+    {
+        playerCircleScore = this.playerCircleScore.Value;
+        playerCrossScore = this.playerCrossScore.Value;
     }
 }
